@@ -1,0 +1,302 @@
+/**********************************************************************/
+/*This code is not clean and OFFCOURSE will be possible do it better! */
+/*this is only a group of functions to be used as independent code,   */
+/*and by this way will be possible to any person can do the changes   */
+/*of code and see what happen.                                        */
+/*The code don't depend of any external library or extenal functions  */
+/*complicated.                                                        */
+/*I'm let the values to sent as binnary, this allow swap bit by bit   */
+/* to is possible test segment by segment without convert to HEX      */
+/**********************************************************************/
+/* This code show how is possible work with the driver SN75518 Sanyo  */
+/*                                                                    */
+/**********************************************************************/
+
+//set your clock speed
+#define F_CPU 16000000UL
+//these are the include files. They are outside the project folder
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <Arduino.h>
+#include <String.h>
+
+#define VFD_in 7  // This is the pin number 7 on Arduino UNO
+#define VFD_clk 8 // This is the pin number 8 on Arduino UNO
+#define VFD_stb1 9 // This is the pin number 9 on Arduino UNO
+#define VFD_stb2 10 // This is the pin number 10 on Arduino UNO
+#define VFD_latchBoth 12//This is the pin number 12 on Arduino UNO
+
+int ledPin = 13; // LED connected to digital pin 13
+// don't define the other pins, but is A0 to input analog signal, pins D2 & D3 is trigger input,
+
+//ATT: On the Uno and other ATMEGA based boards, unsigned ints (unsigned integers) are the same as ints in that they store a 2 byte value.
+//Long variables are extended size variables for number storage, and store 32 bits (4 bytes), from -2,147,483,648 to 2,147,483,647.
+
+//*************************************************//
+void send_char(unsigned char a) {
+  unsigned char transmit = 15; //define our transmit pin
+  unsigned char data = 170; //value to transmit, binary 10101010
+  unsigned char mask = 1; //our bitmask
+  data = a;
+  // the validation of data happen when clk go from LOW to HIGH.
+  digitalWrite(VFD_stb1, LOW); // When strobe is low, all output is enable. If high, all output will be set to low.
+  digitalWrite(VFD_stb2, LOW);
+  delayMicroseconds(5);
+  digitalWrite(VFD_clk, LOW); // need invert the signal to allow 8 bits is is low only send 7 bits
+  delayMicroseconds(5);
+  for (mask = 0b10000000; mask > 0; mask >>= 1) { //iterate through bit mask
+    digitalWrite(VFD_clk, LOW); // need invert the signal to allow 8 bits is is low only send 7 bits
+    delayMicroseconds(5);
+    if (data & mask) { // if bitwise AND resolves to true
+      digitalWrite(VFD_in, HIGH);
+      //Serial.print(1);
+    }
+    else { //if bitwise and resolves to false
+      digitalWrite(VFD_in, LOW);
+      //Serial.print(0);
+    }
+    digitalWrite(VFD_clk, HIGH); // need invert the signal to allow 8 bits is is low only send 7 bits
+    delayMicroseconds(5);
+    //
+    digitalWrite(VFD_stb1, HIGH); // When strobe is low, all output is enable. If high, all output will be set to low.
+    digitalWrite(VFD_stb2, HIGH);
+    delayMicroseconds(5);
+  }
+}
+/*********************************************************************/
+// I h've created 3 functions to send bit's, one with strobe, other without strobe and one with first byte with strobe followed by remaing bits.
+void send_char_without(unsigned char a){
+  unsigned char transmit = 15; //define our transmit pin
+  unsigned char data = 170; //value to transmit, binary 10101010
+  unsigned char mask = 1; //our bitmask
+  data = a;
+  for (mask = 0b10000000; mask > 0; mask >>= 1) { //iterate through bit mask
+    digitalWrite(VFD_clk, LOW);
+    delayMicroseconds(5);
+    if (data & mask) { // if bitwise AND resolves to true
+      digitalWrite(VFD_in, HIGH);
+      //Serial.print(1);
+    }
+    else { //if bitwise and resolves to false
+      digitalWrite(VFD_in, LOW);
+      //Serial.print(0);
+    }
+    digitalWrite(VFD_clk, HIGH);// need invert the signal to allow 8 bits is is low only send 7 bits
+    delayMicroseconds(5);
+  }
+  //Serial.println();
+}
+/*********************************** write to LCD  ***************************************/
+
+/***********************************  switch On all seg   ***************************************/
+void allON_SN75518_grid_1() {
+  //I'm using 2 times a sn75518, but only use the 45 bits to connect to the VFD from AIWA(I think is the brand of compact HIFI with the VFD)
+  //send total of 45 bits (6Bytes), the last 3 bits are not used!
+  digitalWrite(VFD_stb1, HIGH); //
+  
+  delayMicroseconds(1);
+  // On the 75878 the message have first 16*8 bits more 8 times to performe 128 bits(last byte is control: 0BXXX00000)
+
+  send_char_without(0B11111001);  send_char_without(0B11111100); //   1:8   -   9:16//    byte 0 & 1
+  send_char_without(0B00000000);  send_char_without(0B00000100); //  17:24  -  25:32//    Byte 2 & 3
+ //Clock grid is 32, center grid is 31, left grid is 30.
+ //13&14 is a smicolon and segments of 2º grid
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  33:40  -  41:48//    Byte 4 & 5
+  send_char_without(0B00111111);  send_char_without(0B11111111); //  49:56  -  57:64//    Byte 6 & 7
+
+
+  digitalWrite(VFD_latchBoth, HIGH); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_latchBoth, LOW); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_stb1, LOW); //
+}
+void allON_SN75518_grid_2() {
+  //I'm using 2 times a sn75518, but only use the 45 bits to connect to the VFD from AIWA(I think is the brand of compact HIFI with the VFD)
+  //send total of 45 bits (6Bytes), the last 3 bits are not used!
+  digitalWrite(VFD_stb1, HIGH); //
+  
+  delayMicroseconds(1);
+  // On the 75878 the message have first 16*8 bits more 8 times to performe 128 bits(last byte is control: 0BXXX00000)
+
+  send_char_without(0B11111111);  send_char_without(0B11111111); //   1:8   -   9:16//    byte 0 & 1
+  send_char_without(0B11111111);  send_char_without(0B11111010); //  17:24  -  25:32//    Byte 2 & 3
+ //Clock grid is 32, center grid is 31, left grid is 30.
+ //13&14 is a smicolon and segments of 2º grid
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  33:40  -  41:48//    Byte 4 & 5
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  49:56  -  57:64//    Byte 6 & 7
+
+
+  digitalWrite(VFD_latchBoth, HIGH); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_latchBoth, LOW); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_stb1, LOW); //
+}
+void allON_SN75518_grid_3() {
+  //I'm using 2 times a sn75518, but only use the 45 bits to connect to the VFD from AIWA(I think is the brand of compact HIFI with the VFD)
+  //send total of 45 bits (6Bytes), the last 3 bits are not used!
+  digitalWrite(VFD_stb1, HIGH); //
+  
+  delayMicroseconds(1);
+  // On the 75878 the message have first 16*8 bits more 8 times to performe 128 bits(last byte is control: 0BXXX00000)
+
+  send_char_without(0B11111111);  send_char_without(0B11111111); //   1:8   -   9:16//    byte 0 & 1
+  send_char_without(0B11111111);  send_char_without(0B11111001); //  17:24  -  25:32//    Byte 2 & 3
+ //Clock grid is 32, center grid is 31, left grid is 30.
+ //13&14 is a smicolon and segments of 2º grid
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  33:40  -  41:48//    Byte 4 & 5
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  49:56  -  57:64//    Byte 6 & 7
+
+
+  digitalWrite(VFD_latchBoth, HIGH); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_latchBoth, LOW); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_stb1, LOW); //
+}
+void allON_SN75518_withoutSymbols() {
+  //I'm using 2 times a sn75518, but only use the 45 bits to connect to the VFD from AIWA(I think is the brand of compact HIFI with the VFD)
+  //send total of 45 bits (6Bytes), the last 3 bits are not used!
+  digitalWrite(VFD_stb1, HIGH); //
+  
+  delayMicroseconds(1);
+  // On the 75878 the message have first 16*8 bits more 8 times to performe 128 bits(last byte is control: 0BXXX00000)
+
+  send_char_without(0B11111001);  send_char_without(0B11111100); //   1:8   -   9:16//    byte 0 & 1
+  send_char_without(0B00000000);  send_char_without(0B00000110); //  17:24  -  25:32//    Byte 2 & 3
+ //Clock grid is 32, center grid is 31, left grid is 30.
+ //13&14 is a smicolon and segments of 2º grid
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  33:40  -  41:48//    Byte 4 & 5
+  send_char_without(0B00111111);  send_char_without(0B11111111); //  49:56  -  57:64//    Byte 6 & 7
+
+
+  digitalWrite(VFD_latchBoth, HIGH); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_latchBoth, LOW); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_stb1, LOW); //
+}
+void allON_SN75518() {
+  //I'm using 2 times a sn75518, but only use the 45 bits to connect to the VFD from AIWA(I think is the brand of compact HIFI with the VFD)
+  //send total of 45 bits (6Bytes), the last 3 bits are not used!
+  digitalWrite(VFD_stb1, HIGH); //
+  
+  delayMicroseconds(1);
+  // On the 75878 the message have first 16*8 bits more 8 times to performe 128 bits(last byte is control: 0BXXX00000)
+
+  send_char_without(0B11111111);  send_char_without(0B11111111); //   1:8   -   9:16//    byte 0 & 1
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  17:24  -  25:32//    Byte 2 & 3
+
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  33:40  -  41:48//    Byte 4 & 5
+  send_char_without(0B11111111);  send_char_without(0B11111111); //  49:56  -  57:64//    Byte 6 & 7
+
+
+  digitalWrite(VFD_latchBoth, HIGH); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_latchBoth, LOW); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_stb1, LOW); //
+}
+void allON_SN75518_clock() {
+  //I'm using 2 times a sn75518, but only use the 45 bits to connect to the VFD from AIWA(I think is the brand of compact HIFI with the VFD)
+  //send total of 45 bits (6Bytes), the last 3 bits are not used!
+  digitalWrite(VFD_stb1, HIGH); //
+  
+  delayMicroseconds(1);
+  // On the 75878 the message have first 16*8 bits more 8 times to performe 128 bits(last byte is control: 0BXXX00000)
+
+  send_char_without(0B00000000);  send_char_without(0B00000000); //   1:8   -   9:16//    byte 0 & 1
+  send_char_without(0B00000000);  send_char_without(0B00000001); //  17:24  -  25:32//    Byte 2 & 3
+ //Grids do clock é o 32! bytes são ponteiros do Q1
+ //
+  send_char_without(0B00000001);  send_char_without(0B00000001); //  33:40  -  41:48//    Byte 4 & 5
+  send_char_without(0B00000000);  send_char_without(0B00000000); //  49:56  -  57:64//    Byte 6 & 7
+
+
+  digitalWrite(VFD_latchBoth, HIGH); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_latchBoth, LOW); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_stb1, LOW); //
+}
+/*********************************  switch off all seg *****************************************/
+void allOFF_SN75518() {
+  //I'm using 2 times a sn75518, but only use the 45 bits to connect to the VFD from AIWA(I think is the brand of compact HIFI with the VFD)
+  //send total of 45 bits (6Bytes), the last 3 bits are not used!
+
+  digitalWrite(VFD_stb1, HIGH); //
+
+  delayMicroseconds(1);
+  // On the 75878 the message have first 16*8 bits more 8 times to performe 128 bits(last byte is control: 0BXXX00000)
+  //First set of 75518 32 outputs
+  send_char_without(0B00000000);  send_char_without(0B00000000); //   1:8   -   9:16//
+  send_char_without(0B00000000);  send_char_without(0B00000000); //  17:24  -  25:32//
+  //second set of 75518 32 outputs
+  delayMicroseconds(1);
+  send_char_without(0B00000000);  send_char_without(0B00000000); //  33:40  -  41:48//
+  send_char_without(0B00000000);  send_char_without(0B00000000); //  49:56  -  57:46//
+
+  digitalWrite(VFD_latchBoth, HIGH); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_latchBoth, LOW); //
+  delayMicroseconds(1);
+  digitalWrite(VFD_stb1, LOW); //
+}
+
+/************************************* Setup ****************************************/
+void setup() {
+  pinMode(VFD_clk, OUTPUT);
+  pinMode(VFD_in, OUTPUT);
+  pinMode(VFD_stb1, OUTPUT);
+  pinMode(VFD_stb2, OUTPUT);
+  pinMode(VFD_latchBoth, OUTPUT);
+
+  pinMode(ledPin, OUTPUT); // sets the digital pin as output
+  Serial.begin(115200); // only to debug
+
+  //attachInterrupt(digitalPinToInterrupt(2),buttonPressed1,RISING);  // Configuration of Interrupt to the pin 2
+  //attachInterrupt(digitalPinToInterrupt(3),buttonPressed2,RISING);  // Configuration of Interrupt to the pin 3
+  //sei();
+
+}
+/************************************** Loop ****************************************/
+void loop() {
+  //
+  while (1) {
+  digitalWrite(ledPin, HIGH); // sets the LED on
+  //
+  allON_SN75518_grid_1();
+  delay(2000); // waits for two second
+  allON_SN75518_grid_2();
+  delay(2000); // waits for two second
+  allON_SN75518_grid_3();
+  delay(2000); // waits for two second
+  allON_SN75518();  // All on
+  delay(2000); // waits for two second
+  allON_SN75518_withoutSymbols();
+  delay(2000); // waits for a second
+  allON_SN75518_clock();
+  delay(2000); // waits for two second
+  //
+  digitalWrite(ledPin, LOW); // sets the LED off
+  allOFF_SN75518(); // All off
+  //
+  delay(1000); // waits for two second
+  }
+}
+/*****************************************  ISR *************************************/
+void buttonPressed1() {
+  // knob1();  // Call this function
+}
+
+void buttonPressed2() {
+  //knob2(); // Call this function
+}
+/*
+ * The delayMicroseconds() function accepts a single integer (or number) argument. This number represents the time and is measured 
+ * in microseconds. There are a thousand microseconds in a millisecond, and a million microseconds in a second.
+
+Currently, the largest value that can produce an accurate delay is 16383. This may change in future Arduino 
+releases. For delays longer than a few thousand microseconds, you should use the delay() function instead.
+ */
